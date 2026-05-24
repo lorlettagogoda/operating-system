@@ -1,534 +1,280 @@
-import csv
+import argparse
 import random
-import matplotlib.pyplot as plt
+import csv
+import json
+import copy
 
-# =========================================================
-# LOAD PROCESSES FROM CSV
-# =========================================================
+class Process:
+    def __init__(self, pid, arrival, burst, prio):
+        self.pid = pid
+        self.arrival = arrival
+        self.burst = burst
+        self.priority = prio
+        self.remaining = burst
+        self.completion = 0
+        self.turnaround = 0
+        self.waiting = 0
+        self.response = -1
 
-def load_processes(file_path):
+def load_csv(filename):
+    process_list = []
 
-    processes = []
-
-    with open(file_path, 'r') as file:
-
+    with open(filename, "r") as file:
         reader = csv.DictReader(file)
 
         for row in reader:
+            process_list.append(Process(int(row["pid"]),int(row["arrival"]),int(row["burst"]),int(row["priority"])))
 
-            processes.append({
-                "pid": int(row["pid"]),
-                "arrival_time": int(row["arrival_time"]),
-                "burst_time": int(row["burst_time"]),
-                "priority": int(row["priority"])
-            })
+    return process_list
+def load_json(filename):
+    process_list = []
 
-    return processes
+    with open(filename, "r") as file:
+        data = json.load(file)
 
-# =========================================================
-# GENERATE RANDOM PROCESSES
-# =========================================================
+    for row in data:
+        process_list.append(Process(int(row["pid"]),int(row["arrival"]),int(row["burst"]),int(row["priority"])))
 
-def generate_random_processes(n, seed):
+    return process_list
 
+def generate_random(n, seed):
     random.seed(seed)
 
-    processes = []
-
-    for i in range(1, n + 1):
-
-        processes.append({
-            "pid": i,
-            "arrival_time": random.randint(0, 5),
-            "burst_time": random.randint(1, 10),
-            "priority": random.randint(1, 5)
-        })
-
-    return processes
-
-# =========================================================
-# FCFS SCHEDULING
-# =========================================================
-
-def fcfs(processes):
-
-    processes.sort(key=lambda x: (x["arrival_time"], x["pid"]))
-
-    current_time = 0
-
-    schedule = []
-
-    results = []
-
-    for p in processes:
-
-        if current_time < p["arrival_time"]:
-            current_time = p["arrival_time"]
-
-        start = current_time
-
-        end = start + p["burst_time"]
-
-        turnaround = end - p["arrival_time"]
-
-        waiting = turnaround - p["burst_time"]
-
-        response = waiting
-
-        schedule.append((p["pid"], start, end))
-
-        results.append({
-            "PID": p["pid"],
-            "AT": p["arrival_time"],
-            "BT": p["burst_time"],
-            "CT": end,
-            "TAT": turnaround,
-            "WT": waiting,
-            "RT": response
-        })
-
-        current_time = end
-
-    return schedule, results
-
-# =========================================================
-# SJF SCHEDULING
-# =========================================================
-
-def sjf(processes):
-
-    processes.sort(key=lambda x: x["arrival_time"])
-
-    current_time = 0
-
-    completed = []
-
-    ready_queue = []
-
-    schedule = []
-
-    while len(completed) < len(processes):
-
-        for p in processes:
-
-            if p not in completed and p not in ready_queue:
-
-                if p["arrival_time"] <= current_time:
-
-                    ready_queue.append(p)
-
-        if len(ready_queue) == 0:
-
-            current_time += 1
-
-            continue
-
-        ready_queue.sort(key=lambda x: (x["burst_time"], x["arrival_time"]))
-
-        p = ready_queue.pop(0)
-
-        start = current_time
-
-        end = start + p["burst_time"]
-
-        turnaround = end - p["arrival_time"]
-
-        waiting = turnaround - p["burst_time"]
-
-        response = waiting
-
-        schedule.append((p["pid"], start, end))
-
-        completed.append(p)
-
-        completed_result = {
-            "PID": p["pid"],
-            "AT": p["arrival_time"],
-            "BT": p["burst_time"],
-            "CT": end,
-            "TAT": turnaround,
-            "WT": waiting,
-            "RT": response
-        }
-
-        current_time = end
-
-    results = []
-
-    for p in completed:
-
-        completion_time = 0
-
-        for item in schedule:
-
-            if item[0] == p["pid"]:
-                completion_time = item[2]
-
-        turnaround = completion_time - p["arrival_time"]
-
-        waiting = turnaround - p["burst_time"]
-
-        response = waiting
-
-        results.append({
-            "PID": p["pid"],
-            "AT": p["arrival_time"],
-            "BT": p["burst_time"],
-            "CT": completion_time,
-            "TAT": turnaround,
-            "WT": waiting,
-            "RT": response
-        })
-
-    return schedule, results
-
-# =========================================================
-# PRIORITY SCHEDULING
-# =========================================================
-
-def priority_scheduling(processes):
-
-    processes.sort(key=lambda x: x["arrival_time"])
-
-    current_time = 0
-
-    completed = []
-
-    ready_queue = []
-
-    schedule = []
-
-    results = []
-
-    while len(completed) < len(processes):
-
-        for p in processes:
-
-            if p not in completed and p not in ready_queue:
-
-                if p["arrival_time"] <= current_time:
-
-                    ready_queue.append(p)
-
-        if len(ready_queue) == 0:
-
-            current_time += 1
-
-            continue
-
-        # AGEING
-
-        for p in ready_queue:
-
-            waiting_time = current_time - p["arrival_time"]
-
-            if waiting_time > 0 and waiting_time % 3 == 0:
-
-                p["priority"] = max(0, p["priority"] - 1)
-
-        ready_queue.sort(key=lambda x: (x["priority"], x["arrival_time"]))
-
-        p = ready_queue.pop(0)
-
-        start = current_time
-
-        end = start + p["burst_time"]
-
-        turnaround = end - p["arrival_time"]
-
-        waiting = turnaround - p["burst_time"]
-
-        response = waiting
-
-        schedule.append((p["pid"], start, end))
-
-        completed.append(p)
-
-        results.append({
-            "PID": p["pid"],
-            "AT": p["arrival_time"],
-            "BT": p["burst_time"],
-            "PR": p["priority"],
-            "CT": end,
-            "TAT": turnaround,
-            "WT": waiting,
-            "RT": response
-        })
-
-        current_time = end
-
-    return schedule, results
-
-# =========================================================
-# ROUND ROBIN
-# =========================================================
-
-def round_robin(processes, quantum):
-
-    processes.sort(key=lambda x: x["arrival_time"])
-
-    queue = []
-
-    remaining = {}
-
-    current_time = 0
-
-    schedule = []
-
-    results = []
-
-    completed = []
-
-    for p in processes:
-
-        remaining[p["pid"]] = p["burst_time"]
-
-    i = 0
-
-    while len(completed) < len(processes):
-
-        while i < len(processes) and processes[i]["arrival_time"] <= current_time:
-
-            queue.append(processes[i])
-
-            i += 1
-
-        if len(queue) == 0:
-
-            current_time += 1
-
-            continue
-
-        p = queue.pop(0)
-
-        start = current_time
-
-        execution = min(quantum, remaining[p["pid"]])
-
-        current_time += execution
-
-        end = current_time
-
-        remaining[p["pid"]] -= execution
-
-        schedule.append((p["pid"], start, end))
-
-        while i < len(processes) and processes[i]["arrival_time"] <= current_time:
-
-            queue.append(processes[i])
-
-            i += 1
-
-        if remaining[p["pid"]] > 0:
-
-            queue.append(p)
-
-        else:
-
-            completed.append(p["pid"])
-
-            turnaround = current_time - p["arrival_time"]
-
-            waiting = turnaround - p["burst_time"]
-
-            response = waiting
-
-            results.append({
-                "PID": p["pid"],
-                "AT": p["arrival_time"],
-                "BT": p["burst_time"],
-                "CT": current_time,
-                "TAT": turnaround,
-                "WT": waiting,
-                "RT": response
-            })
-
-    return schedule, results
-
-# =========================================================
-# PRINT RESULTS TABLE
-# =========================================================
-
-def print_results(results):
-
-    print("\n======================================================")
-    print("PID\tAT\tBT\tCT\tTAT\tWT\tRT")
-    print("======================================================")
-
-    for r in results:
-
-        print(
-            f"{r['PID']}\t"
-            f"{r['AT']}\t"
-            f"{r['BT']}\t"
-            f"{r['CT']}\t"
-            f"{r['TAT']}\t"
-            f"{r['WT']}\t"
-            f"{r['RT']}"
-        )
-
-# =========================================================
-# CALCULATE METRICS
-# =========================================================
-
-def calculate_metrics(results):
-
-    n = len(results)
+    process_list = []
+
+    for i in range(n):
+        arrival = random.randint(0, 10)
+        burst = random.randint(1, 10)
+        prio = random.randint(1, 5)
+        processes.append(Process(i + 1,arrival,burst,prio))
+
+    return process_list
+
+def finalize_metrics(process_list):
+    for p in process_list:
+        p.turnaround = p.completion - p.arrival
+        p.waiting = p.turnaround - p.burst
+
+def print_results(name, process_list):
+    print("\n==============================")
+    print(name)
+    print("==============================")
+
+    print("PID  Arr  Burst  Comp  TAT  WT  RT")
 
     total_wt = 0
     total_tat = 0
     total_rt = 0
-    total_bt = 0
-    total_ct = 0
+    total_burst = 0
 
-    for r in results:
+    finish_time = max(p.completion for p in process_list)
 
-        total_wt += r["WT"]
-        total_tat += r["TAT"]
-        total_rt += r["RT"]
-        total_bt += r["BT"]
+    for p in sorted(process_list, key=lambda x: x.pid):
+        print(f"{p.pid:<4}"f"{p.arrival:<5}"f"{p.burst:<7}"f"{p.completion:<6}"f"{p.turnaround:<5}"f"{p.waiting:<4}"f"{p.response:<4}")
 
-        if r["CT"] > total_ct:
-            total_ct = r["CT"]
+        total_wt += p.waiting
+        total_tat += p.turnaround
+        total_rt += p.response
+        total_burst += p.burst
+
+    n = len(process_list)
 
     avg_wt = total_wt / n
-
     avg_tat = total_tat / n
-
     avg_rt = total_rt / n
 
-    cpu_util = (total_bt / total_ct) * 100
+    cpu = (total_burst / finish_time) * 100
+    throughput = n / finish_time
 
-    throughput = n / total_ct
+    print("\n--- Aggregate ---")
+    print("Average WT:", round(avg_wt, 2))
+    print("Average TAT:", round(avg_tat, 2))
+    print("Average RT:", round(avg_rt, 2))
+    print("CPU Utilization:", round(cpu, 2), "%")
+    print("Throughput:", round(throughput, 2))
 
-    print("\n==============================")
-    print("AVERAGE METRICS")
-    print("==============================")
+def fcfs(original):
+    plist = copy.deepcopy(original)
 
-    print(f"Average WT: {avg_wt:.2f}")
-    print(f"Average TAT: {avg_tat:.2f}")
-    print(f"Average RT: {avg_rt:.2f}")
-    print(f"CPU Utilisation: {cpu_util:.2f}%")
-    print(f"Throughput: {throughput:.2f}")
+    plist.sort(key=lambda x: (x.arrival, x.pid))
 
-# =========================================================
-# DRAW GANTT CHART
-# =========================================================
+    time = 0
 
-def draw_gantt(schedule, title):
+    for p in plist:
+        if time < p.arrival:
+            time = p.arrival
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+        p.response = time - p.arrival
+        time += p.burst
+        p.completion = time
 
-    for task in schedule:
+    finalize_metrics(plist)
+    print_results("FCFS", plist)
 
-        pid = task[0]
-        start = task[1]
-        end = task[2]
+def sjf(original):
+    plist = copy.deepcopy(original)
 
-        ax.barh(
-            y=f"P{pid}",
-            width=end - start,
-            left=start,
-            height=0.5
-        )
+    completed = []
+    time = 0
 
-        ax.text(
-            start + ((end - start) / 2),
-            f"P{pid}",
-            f"P{pid}",
-            ha='center',
-            va='center',
-            color='white'
-        )
+    while len(completed) < len(plist):
 
-    ax.set_xlabel("Time")
+        ready = [
+            p for p in plist
+            if p.arrival <= time and p not in completed
+        ]
 
-    ax.set_title(title)
+        if ready:
+            ready.sort(key=lambda x:(x.burst, x.arrival, x.pid))
+            p = ready[0]
 
-    plt.savefig(f"{title}.png")
+            p.response = time - p.arrival
+            time += p.burst
+            p.completion = time
 
-    plt.show()
+            completed.append(p)
 
-# =========================================================
-# MAIN PROGRAM
-# =========================================================
+        else:
+            time += 1
 
-print("===================================")
-print("EDUOS PROCESS SCHEDULER")
-print("===================================")
+    finalize_metrics(plist)
+    print_results("SJF", plist)
 
-print("\nChoose Input Method")
-print("1. Load CSV File")
-print("2. Generate Random Processes")
+def priority(original):
+    plist = copy.deepcopy(original)
 
-choice = input("Enter choice: ")
+    completed = []
+    time = 0
 
-if choice == "1":
+    while len(completed) < len(plist):
+        ready = [
+            p for p in plist
+            if p.arrival <= time and p not in completed
+        ]
+        if ready:
+            # Lower priority number = higher urgency
+            ready.sort(key=lambda x:(x.priority, x.arrival, x.pid))
+            p = ready[0]
 
-    filename = input("Enter CSV filename: ")
+            p.response = time - p.arrival
+            time += p.burst
+            p.completion = time
 
-    processes = load_processes(filename)
+            completed.append(p)
 
-elif choice == "2":
+        else:
+            time += 1
 
-    n = int(input("Number of processes: "))
+    finalize_metrics(plist)
+    print_results("Priority", plist)
 
-    seed = int(input("Enter seed value: "))
+def priority_sched(original):
+    plist = copy.deepcopy(original)
 
-    processes = generate_random_processes(n, seed)
+    completed = []
+    time = 0
+    wait = {}
 
+    for p in plist:
+        wait[p.pid] = 0
+
+    while len(completed) < len(plist):
+
+        ready = [
+            p for p in plist
+            if p.arrival <= time and p not in completed
+        ]
+
+        if ready:
+            for p in ready:
+                wait[p.pid] += 1
+
+                if wait[p.pid] % 3 == 0:
+                    if p.priority > 1:
+                        p.priority -= 1
+
+            ready.sort(key=lambda x:(x.priority, x.arrival, x.pid))
+            p = ready[0]
+
+            p.response = time - p.arrival
+            time += p.burst
+            p.completion = time
+
+            completed.append(p)
+
+        else:
+            time += 1
+
+    finalize_metrics(plist)
+    print_results("Priority + Ageing", plist)
+
+def round_robin(original, quantum):
+    plist = copy.deepcopy(original)
+
+    plist.sort(key=lambda x: x.arrival)
+
+    queue = []
+    time = 0
+    index = 0
+
+    while True:
+
+        while index < len(plist) and plist[index].arrival <= time:
+            queue.append(plist[index])
+            index += 1
+
+        if not queue:
+            if index == len(plist):
+                break
+
+            time += 1
+            continue
+
+        p = queue.pop(0)
+
+        if p.response == -1:
+            p.response = time - p.arrival
+
+        run = min(quantum, p.remaining)
+
+        time += run
+        p.remaining -= run
+
+        while index < len(plist) and plist[index].arrival <= time:
+            queue.append(plist[index])
+            index += 1
+
+        if p.remaining > 0:
+            queue.append(p)
+        else:
+            p.completion = time
+
+    finalize_metrics(plist)
+    print_results(f"Round Robin (Q={quantum})",plist)
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--random", type=int)
+parser.add_argument("--seed", type=int, default=1)
+parser.add_argument("--file")
+parser.add_argument("--quantum", type=int, default=2)
+
+args = parser.parse_args()
+
+if args.random:
+    processes = generate_random(args.random,args.seed)
+
+elif args.file:
+    if args.file.endswith(".csv"):
+        processes = load_csv(args.file)
+    else:
+        processes = load_json(args.file)
 else:
-
-    print("Invalid Choice")
-
+    print("Use --random or --file")
     exit()
 
-print("\nChoose Algorithm")
-print("1. FCFS")
-print("2. SJF")
-print("3. Priority")
-print("4. Round Robin")
-
-algorithm = input("Enter choice: ")
-
-if algorithm == "1":
-
-    schedule, results = fcfs(processes)
-
-    title = "FCFS"
-
-elif algorithm == "2":
-
-    schedule, results = sjf(processes)
-
-    title = "SJF"
-
-elif algorithm == "3":
-
-    schedule, results = priority_scheduling(processes)
-
-    title = "PRIORITY"
-
-elif algorithm == "4":
-
-    quantum = int(input("Enter Quantum: "))
-
-    schedule, results = round_robin(processes, quantum)
-
-    title = "ROUND_ROBIN"
-
-else:
-
-    print("Invalid Algorithm")
-
-    exit()
-
-# =========================================================
-# DISPLAY OUTPUT
-# =========================================================
-
-print_results(results)
-
-calculate_metrics(results)
-
-draw_gantt(schedule, title)
+fcfs(processes)
+sjf(processes)
+priority(processes)
+priority_sched(processes)
+round_robin(processes, args.quantum)
