@@ -1,242 +1,99 @@
-// ipc_module.c
-
-#include "include/eduos.h"
-
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-
-// ======================================================
-// SHARED MEMORY STRUCT
-// ======================================================
+#include "eduos.h"
 
 typedef struct {
-
-    int owner_id;
-
-    int total_processes;
-
-    int cpu_usage;
-
-    char message[100];
-
+    int pid;
+    int burst_time;
 } SharedData;
 
-// ======================================================
-// SHARED MEMORY DEMO
-// ======================================================
+void run_ipc_module()
+{
+    printf("\n===== IPC Module =====\n");
 
-void run_shared_memory_demo() {
+    HANDLE hMapFile;
+    HANDLE hMutex;
+    SharedData *data;
 
-    printf("\n");
-    printf("=====================================\n");
-    printf("SHARED MEMORY DEMO\n");
-    printf("=====================================\n");
+    hMapFile = CreateFileMapping(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_READWRITE,
+        0,
+        sizeof(SharedData),
+        "MySharedMemory"
+    );
 
-    const char *shared_memory_name = "/eduos_shared_memory";
+    data = (SharedData*) MapViewOfFile(
+        hMapFile,
+        FILE_MAP_ALL_ACCESS,
+        0,
+        0,
+        sizeof(SharedData)
+    );
 
-    int shm_fd;
+    hMutex = CreateMutex(NULL, FALSE, "MyMutex");
 
-    SharedData *shared_data;
+    WaitForSingleObject(hMutex, INFINITE);
 
-    // --------------------------------------------------
-    // CREATE SHARED MEMORY
-    // --------------------------------------------------
+    data->pid = 101;
+    data->burst_time = 5;
 
-    shm_fd = shm_open(shared_memory_name,
-                      O_CREAT | O_RDWR,
-                      0666);
+    printf("Shared Memory Written:\n");
+    printf("PID = %d\n", data->pid);
+    printf("Burst Time = %d\n", data->burst_time);
 
-    if(shm_fd < 0) {
+    ReleaseMutex(hMutex);
 
-        perror("shm_open failed");
+    WaitForSingleObject(hMutex, INFINITE);
 
-        return;
-    }
+    printf("Shared Memory Read:\n");
+    printf("PID = %d\n", data->pid);
+    printf("Burst Time = %d\n", data->burst_time);
 
-    // allocate memory size
-    if(ftruncate(shm_fd, sizeof(SharedData)) == -1) {
+    ReleaseMutex(hMutex);
 
-        perror("ftruncate failed");
+    HANDLE readPipe, writePipe;
+    SECURITY_ATTRIBUTES sa;
 
-        return;
-    }
+    char buffer[100];
+    DWORD bytesRead, bytesWritten;
 
-    // map memory
-    shared_data = mmap(NULL,
-                       sizeof(SharedData),
-                       PROT_READ | PROT_WRITE,
-                       MAP_SHARED,
-                       shm_fd,
-                       0);
+    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+    sa.lpSecurityDescriptor = NULL;
+    sa.bInheritHandle = TRUE;
 
-    if(shared_data == MAP_FAILED) {
+    CreatePipe(&readPipe, &writePipe, &sa, 0);
 
-        perror("mmap failed");
+    char message[] = "202,8";
 
-        return;
-    }
+    WriteFile(
+        writePipe,
+        message,
+        strlen(message) + 1,
+        &bytesWritten,
+        NULL
+    );
 
-    // --------------------------------------------------
-    // PARENT PROCESS WRITES DATA
-    // --------------------------------------------------
+    ReadFile(
+        readPipe,
+        buffer,
+        sizeof(buffer),
+        &bytesRead,
+        NULL
+    );
 
-    shared_data->owner_id = 1001;
+    int pcb_pid, pcb_burst;
 
-    shared_data->total_processes = 5;
+    sscanf(buffer, "%d,%d", &pcb_pid, &pcb_burst);
 
-    shared_data->cpu_usage = 78;
+    printf("\nPipe Data Received:\n");
+    printf("PID = %d\n", pcb_pid);
+    printf("Burst Time = %d\n", pcb_burst);
 
-    strcpy(shared_data->message,
-           "Shared memory communication successful");
+    CloseHandle(readPipe);
+    CloseHandle(writePipe);
+    UnmapViewOfFile(data);
+    CloseHandle(hMapFile);
+    CloseHandle(hMutex);
 
-    printf("Parent wrote to shared memory.\n");
-
-    // --------------------------------------------------
-    // CREATE CHILD PROCESS
-    // --------------------------------------------------
-
-    pid_t pid = fork();
-
-    if(pid < 0) {
-
-        perror("fork failed");
-
-        return;
-    }
-
-    // --------------------------------------------------
-    // CHILD PROCESS
-    // --------------------------------------------------
-
-    if(pid == 0) {
-
-        printf("\nChild process attempting access...\n");
-
-        int child_owner_id = 1001;
-
-        // ACCESS CONTROL CHECK
-        if(child_owner_id == shared_data->owner_id) {
-
-            printf("Access granted.\n");
-
-            printf("Total Processes: %d\n",
-                   shared_data->total_processes);
-
-            printf("CPU Usage: %d%%\n",
-                   shared_data->cpu_usage);
-
-            printf("Message: %s\n",
-                   shared_data->message);
-
-        } else {
-
-            printf("Access denied.\n");
-        }
-
-        exit(0);
-    }
-
-    // --------------------------------------------------
-    // PARENT WAITS
-    // --------------------------------------------------
-
-    wait(NULL);
-
-    // --------------------------------------------------
-    // CLEANUP
-    // --------------------------------------------------
-
-    munmap(shared_data, sizeof(SharedData));
-
-    close(shm_fd);
-
-    shm_unlink(shared_memory_name);
-
-    printf("Shared memory cleaned up.\n");
-}
-
-// ======================================================
-// PIPE DEMO
-// ======================================================
-
-void run_pipe_demo() {
-
-    printf("\n");
-    printf("=====================================\n");
-    printf("PIPE IPC DEMO\n");
-    printf("=====================================\n");
-
-    int fd[2];
-
-    if(pipe(fd) == -1) {
-
-        perror("pipe failed");
-
-        return;
-    }
-
-    pid_t pid = fork();
-
-    if(pid < 0) {
-
-        perror("fork failed");
-
-        return;
-    }
-
-    // --------------------------------------------------
-    // CHILD PROCESS
-    // --------------------------------------------------
-
-    if(pid == 0) {
-
-        close(fd[1]);
-
-        char buffer[256];
-
-        read(fd[0], buffer, sizeof(buffer));
-
-        printf("\nChild received PCB data:\n");
-
-        printf("%s\n", buffer);
-
-        close(fd[0]);
-
-        exit(0);
-    }
-
-    // --------------------------------------------------
-    // PARENT PROCESS
-    // --------------------------------------------------
-
-    else {
-
-        close(fd[0]);
-
-        char pcb_data[256];
-
-        sprintf(pcb_data,
-                "{ PID: %d, NAME: %s, STATE: %s }",
-
-                pcb_table[0].pid,
-
-                pcb_table[0].name,
-
-                state_to_string(pcb_table[0].state)
-        );
-
-        write(fd[1],
-              pcb_data,
-              strlen(pcb_data) + 1);
-
-        printf("Parent sent PCB data through pipe.\n");
-
-        close(fd[1]);
-
-        wait(NULL);
-    }
-
-    printf("Pipe communication completed.\n");
+    printf("IPC module finished\n");
 }

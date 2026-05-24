@@ -1,71 +1,48 @@
 #ifndef EDUOS_H
 #define EDUOS_H
 
+/* Standard libraries */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <time.h>
+
+/* Threading */
 #include <pthread.h>
 
-// ---------------- CONSTANTS ----------------
-#define MAX_PROCESSES 100
+/* Windows-specific functions */
+#include <windows.h>
 
-// Process States
-#define NEW 0
-#define READY 1
-#define RUNNING 2
-#define WAITING 3
-#define TERMINATED 4
 
-// ---------------- PCB STRUCT ----------------
-typedef struct {
-
-    pid_t pid;
-
-    char name[64];
-
-    int state;
-
-    int priority;
-
+/* =====================================
+   SHARED PCB STRUCTURE
+===================================== */
+typedef struct
+{
+    int pid;
     int burst_time;
-
-    int arrival_time;
-
-    int remaining_time;
-
-    int memory_req_kb;
-
-    int thread_count;
-
-    time_t creation_time;
-
-    // Extra fields
-    pid_t parent_pid;
-
-    int exit_code;
-
 } PCB;
 
-// ---------------- GLOBAL VARIABLES ----------------
-extern PCB pcb_table[MAX_PROCESSES];
 
-extern int pcb_count;
+/* =====================================
+   FUNCTION DECLARATIONS
+===================================== */
 
-// ---------------- FUNCTION DECLARATIONS ----------------
-pid_t edu_fork(PCB *parent);
+/* Process manager */
+void run_process_manager();
 
-void edu_exec(pid_t pid, char *prog_name);
+/* Basic thread manager */
+void run_thread_manager();
 
-int edu_wait(pid_t parent_pid);
+/* Race condition demo */
+void run_thread_manager_race();
 
-void edu_exit(pid_t pid, int exit_code);
+/* Fixed race condition (mutex) */
+void run_thread_manager_fixed();
 
-void edu_ps();
+/* Thread pool */
+void run_thread_pool();
 
-void save_pcb_snapshot();
-
-const char* state_to_string(int state);
+/* IPC module */
+void run_ipc_module();
 
 #endif

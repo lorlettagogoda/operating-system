@@ -1,0 +1,28 @@
+[
+  {
+    "pid": 1000,
+    "name": "init.exe",
+    "state": "READY",
+    "priority": 1,
+    "burst_time": 20,
+    "arrival_time": 0,
+    "remaining_time": 20,
+    "memory_req_kb": 512,
+    "thread_count": 2,
+    "parent_pid": 0,
+    "exit_code": 0
+  },
+  {
+    "pid": 1001,
+    "name": "chrome.exe",
+    "state": "TERMINATED",
+    "priority": 1,
+    "burst_time": 10,
+    "arrival_time": 0,
+    "remaining_time": 10,
+    "memory_req_kb": 512,
+    "thread_count": 2,
+    "parent_pid": 1000,
+    "exit_code": 0
+  }
+]
